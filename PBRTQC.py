@@ -15,15 +15,15 @@ from stqdm import stqdm
 
 
 with st.sidebar:
-   #st.image('./images/QC_Constellation_sidebar.png')
-   #st.info('*Developed by Hikmet Can Çubukçu, MD, MSc, EuSpLM* <hikmetcancubukcu@gmail.com>')
+    st.image('./images/QC_Constellation_sidebar.png')
+    st.info('*Developed by Hikmet Can Çubukçu, MD, MSc, EuSpLM* <hikmetcancubukcu@gmail.com>')
     
     
 st.markdown("#### **:blue[Optimize Parameters of Moving Averages Charts for Patient Based Quality Control]**")
 
 st.write("---")
 
-#st.info('**Desktop application download link for Windows:** [Optimizer-4-PBQC.exe](https://drive.google.com/file/d/1ygmiuxKGnqfuG6XaJC55BF_UCPZSNnAo/view?usp=sharing)')
+st.info('**Desktop application download link for Windows:** [Optimizer-4-PBQC.exe](https://drive.google.com/file/d/1ygmiuxKGnqfuG6XaJC55BF_UCPZSNnAo/view?usp=sharing)')
 
 comment_out = """
 with st.sidebar:
@@ -1094,5 +1094,3 @@ with tab2:
    #                         | **:black[Mean]** | **{round(mean,2)}** |
     #                        | **:black[Standard Deviation]** | **{round(std_dev,2)}** |
      #                       """)
-
-
