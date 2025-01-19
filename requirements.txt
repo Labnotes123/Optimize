@@ -6,3 +6,4 @@ scipy
 stqdm
 openpyxl
 matplotlib
+PyQt5
