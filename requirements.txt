@@ -7,3 +7,9 @@ stqdm
 openpyxl
 matplotlib
 PyQt5
+tk
+warnings
+logging
+filelock
+joblib
+pillow
