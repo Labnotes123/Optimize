@@ -37,6 +37,11 @@ def scrape_all_data(limit=20):
         return []
     
     json_data = resp.json()
+    # Kiểm tra sự tồn tại của key "meta" và "total"
+    if "meta" not in json_data or "total" not in json_data["meta"]:
+        st.error(f"Không tìm thấy thông tin meta.total trong dữ liệu API. Dữ liệu trả về: {json_data}")
+        return []
+    
     total = json_data["meta"]["total"]  # tổng số item
     st.write(f"Tổng số item: {total}")
     
@@ -78,9 +83,12 @@ def main():
     st.title("Demo Scrape BiologicalVariation.eu")
     if st.button("Bắt đầu lấy dữ liệu"):
         results = scrape_all_data(limit=20)
-        df = pd.DataFrame(results)
-        st.dataframe(df)
-        st.success("Hoàn thành!")
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df)
+            st.success("Hoàn thành!")
+        else:
+            st.error("Không có dữ liệu nào được lấy về.")
 
 if __name__ == "__main__":
     main()
