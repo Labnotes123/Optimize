@@ -1,88 +1,86 @@
-import time
-import pandas as pd
 import streamlit as st
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
-import subprocess
-import sys
+import requests
+import math
+import pandas as pd
 
-# Ensure dependencies are installed
-def install_missing_packages():
-    required_packages = ["selenium", "webdriver-manager", "pandas", "streamlit"]
-    for package in required_packages:
-        try:
-            __import__(package)
-        except ImportError:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+def fetch_detail(spec_id):
+    """
+    Gọi endpoint chi tiết của 1 specification, trả về (within_subject, between_subject).
+    """
+    base_url = "https://biologicalvariation.eu/api/bv_specifications"
+    detail_url = f"{base_url}/{spec_id}"
+    resp = requests.get(detail_url)
+    if resp.status_code == 200:
+        detail_data = resp.json()
+        # 'bv_estimates' là mảng, thường phần tử đầu có within_subject_variation, between_subject_variation
+        estimates = detail_data.get("bv_estimates", [])
+        if len(estimates) > 0:
+            within_subj = estimates[0].get("within_subject_variation", None)
+            between_subj = estimates[0].get("between_subject_variation", None)
+            return within_subj, between_subj
+    return None, None
 
-install_missing_packages()
-
-# Function to extract data
-def scrape_biological_variation():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920x1080")
+def scrape_all_data(limit=20):
+    """
+    Lấy toàn bộ dữ liệu:
+      - Measurand
+      - Reference
+      - within_subject_variation
+      - between_subject_variation (từ trang chi tiết)
+    """
+    base_url = "https://biologicalvariation.eu/api/bv_specifications"
     
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    # Gọi trang đầu để biết total
+    resp = requests.get(base_url, params={"limit": limit, "offset": 0})
+    if resp.status_code != 200:
+        st.error("Không thể truy cập API trang BV Specifications!")
+        return []
     
-    base_url = "https://biologicalvariation.eu/bv_specifications?page={}"  # Adjust for pagination
-    page = 1
-    data = []
+    json_data = resp.json()
+    total = json_data["meta"]["total"]  # tổng số item
+    st.write(f"Tổng số item: {total}")
     
-    while True:
-        driver.get(base_url.format(page))
-        time.sleep(3)
+    # Tính số vòng lặp
+    total_pages = math.ceil(total / limit)
+    all_results = []
+    
+    for page_idx in range(total_pages):
+        offset = page_idx * limit
+        st.write(f"Đang tải trang {page_idx+1}/{total_pages} (offset={offset})...")
         
-        # Extract Measurand, Specification (View Details), Reference
-        measurands = driver.find_elements(By.CSS_SELECTOR, "td:nth-child(1)")
-        specifications = driver.find_elements(By.CSS_SELECTOR, "td:nth-child(2) button")
-        references = driver.find_elements(By.CSS_SELECTOR, "td:nth-child(3)")
+        resp_page = requests.get(base_url, params={"limit": limit, "offset": offset})
+        if resp_page.status_code != 200:
+            st.warning(f"Không load được offset={offset}")
+            continue
         
-        if not measurands:
-            break  # Stop if no more data
+        data_page = resp_page.json()
+        items = data_page.get("data", [])
         
-        for i in range(len(measurands)):
-            measurand = measurands[i].text.strip()
-            reference = references[i].text.strip() if i < len(references) else ""
+        # Duyệt qua các item
+        for item in items:
+            spec_id = item["id"]
+            measurand = item.get("measurand", "")
+            reference = item.get("reference", "")
             
-            # Click on View Details
-            within_subject = "N/A"
-            between_subject = "N/A"
-            try:
-                driver.execute_script("arguments[0].click();", specifications[i])
-                time.sleep(3)
-                
-                # Extract Estimates of Within Subject & Between Subject
-                within_subject_elem = driver.find_elements(By.CSS_SELECTOR, "td:contains('Estimates of Within Subject') + td")
-                between_subject_elem = driver.find_elements(By.CSS_SELECTOR, "td:contains('Estimates of Between Subject') + td")
-                
-                if within_subject_elem:
-                    within_subject = within_subject_elem[0].text.strip()
-                if between_subject_elem:
-                    between_subject = between_subject_elem[0].text.strip()
-                
-                driver.back()
-                time.sleep(3)
-            except Exception as e:
-                print(f"Error extracting details: {e}")
+            # Lấy detail
+            within_subj, between_subj = fetch_detail(spec_id)
             
-            data.append([measurand, reference, within_subject, between_subject])
-        
-        page += 1  # Move to next page
+            all_results.append({
+                "Measurand": measurand,
+                "Reference": reference,
+                "WithinSubject": within_subj,
+                "BetweenSubject": between_subj
+            })
     
-    driver.quit()
-    
-    df = pd.DataFrame(data, columns=["Measurand", "Reference", "Estimates of Within Subject", "Estimates of Between Subject"])
-    return df
+    return all_results
 
-# Streamlit UI
-st.title("Biological Variation Data Scraper")
-if st.button("Start Scraping"):
-    df = scrape_biological_variation()
-    st.write(df)
-    st.download_button("Download Data", df.to_csv(index=False), "biological_variation_data.csv", "text/csv")
+def main():
+    st.title("Demo Scrape BiologicalVariation.eu")
+    if st.button("Bắt đầu lấy dữ liệu"):
+        results = scrape_all_data(limit=20)
+        df = pd.DataFrame(results)
+        st.dataframe(df)
+        st.success("Hoàn thành!")
+
+if __name__ == "__main__":
+    main()
