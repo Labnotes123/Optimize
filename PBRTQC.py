@@ -80,7 +80,11 @@ def scrape_all_data(limit=20):
     return all_results
 
 def main():
-    st.title("Demo Scrape BiologicalVariation.eu")
+    # Đổi tiêu đề
+    st.title("Website trích xuất dữ liệu biến thiên sinh học")
+    # Thêm đường link tham khảo
+    st.write("Tham khảo: [Biological Variation](https://biologicalvariation.eu/bv_specifications)")
+
     if st.button("Bắt đầu lấy dữ liệu"):
         results = scrape_all_data(limit=20)
         if results:
