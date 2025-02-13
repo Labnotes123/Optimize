@@ -1,15 +1,3 @@
 streamlit
+requests
 pandas
-numpy
-plotly
-scipy
-stqdm
-openpyxl
-matplotlib
-PyQt5
-tk
-warnings
-logging
-filelock
-joblib
-pillow
