@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import math
 import pandas as pd
+import concurrent.futures
 
 @st.cache_data
 def fetch_detail(spec_id):
@@ -30,22 +31,36 @@ def fetch_page_data(offset, limit):
     base_url = "https://biologicalvariation.eu/api/bv_specifications"
     resp_page = requests.get(base_url, params={"limit": limit, "offset": offset})
     if resp_page.status_code == 200:
-         return resp_page.json()
+        return resp_page.json()
     else:
-         return None
+        return None
 
-def scrape_all_data(limit=20):
+def process_item(item):
+    """
+    Xử lý từng item: lấy thông tin cơ bản và gọi fetch_detail để lấy dữ liệu chi tiết.
+    """
+    spec_id = item["id"]
+    measurand = item.get("measurand", "")
+    reference = item.get("reference", "")
+    within_subj, between_subj = fetch_detail(spec_id)
+    return {
+        "Measurand": measurand,
+        "Reference": reference,
+        "WithinSubject": within_subj,
+        "BetweenSubject": between_subj
+    }
+
+def scrape_all_data(limit=20, max_pages=None):
     """
     Lấy toàn bộ dữ liệu:
       - Measurand
       - Reference
       - within_subject_variation và between_subject_variation (từ trang chi tiết)
-      
-    Đồng thời hiển thị progress bar theo từng trang được load.
+    
+    Sử dụng progress bar để hiển thị tiến trình và giới hạn số trang theo yêu cầu của người dùng.
     """
     base_url = "https://biologicalvariation.eu/api/bv_specifications"
-    
-    # Gọi trang đầu tiên để biết tổng số item
+    # Gọi trang đầu tiên để xác định tổng số item
     resp = requests.get(base_url, params={"limit": limit, "offset": 0})
     if resp.status_code != 200:
         st.error("Không thể truy cập API trang BV Specifications!")
@@ -60,47 +75,44 @@ def scrape_all_data(limit=20):
     st.write(f"Tổng số item: {total}")
     
     total_pages = math.ceil(total / limit)
-    all_results = []
+    # Giới hạn số trang lấy dữ liệu theo lựa chọn của người dùng
+    if max_pages is None:
+        pages_to_scrape = total_pages
+    else:
+        pages_to_scrape = min(max_pages, total_pages)
+    st.write(f"Sẽ lấy dữ liệu từ {pages_to_scrape} trang.")
     
-    # Khởi tạo progress bar
+    all_results = []
     progress_bar = st.progress(0)
     
-    # Duyệt qua từng trang (mỗi trang có 'limit' item)
-    for page_idx in range(total_pages):
-        offset = page_idx * limit
-        st.write(f"Đang tải trang {page_idx+1}/{total_pages} (offset={offset})...")
-        
-        data_page = fetch_page_data(offset, limit)
-        if not data_page:
-            st.warning(f"Không load được offset={offset}")
-            continue
-        
-        items = data_page.get("data", [])
-        for item in items:
-            spec_id = item["id"]
-            measurand = item.get("measurand", "")
-            reference = item.get("reference", "")
-            within_subj, between_subj = fetch_detail(spec_id)
+    with st.spinner("Đang tải dữ liệu..."):
+        for page_idx in range(pages_to_scrape):
+            offset = page_idx * limit
+            st.write(f"Đang tải trang {page_idx+1}/{pages_to_scrape} (offset={offset})...")
+            data_page = fetch_page_data(offset, limit)
+            if not data_page:
+                st.warning(f"Không load được offset={offset}")
+                continue
             
-            all_results.append({
-                "Measurand": measurand,
-                "Reference": reference,
-                "WithinSubject": within_subj,
-                "BetweenSubject": between_subj
-            })
-        
-        # Cập nhật progress bar theo số trang đã load
-        progress_bar.progress((page_idx + 1) / total_pages)
+            items = data_page.get("data", [])
+            # Xử lý song song các item trong trang
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                results = list(executor.map(process_item, items))
+                all_results.extend(results)
+            
+            progress_bar.progress((page_idx + 1) / pages_to_scrape)
     
     return all_results
 
 def main():
-    # Đổi tiêu đề và hiển thị đường link tham khảo
     st.title("Website trích xuất dữ liệu biến thiên sinh học")
     st.write("Tham khảo: [Biological Variation](https://biologicalvariation.eu/bv_specifications)")
     
+    # Cho phép người dùng nhập số trang muốn lấy dữ liệu
+    num_pages = st.number_input("Chọn số trang muốn lấy dữ liệu:", min_value=1, value=1, step=1)
+    
     if st.button("Bắt đầu lấy dữ liệu"):
-        results = scrape_all_data(limit=20)
+        results = scrape_all_data(limit=20, max_pages=num_pages)
         if results:
             df = pd.DataFrame(results)
             st.dataframe(df)
